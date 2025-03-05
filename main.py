@@ -117,8 +117,8 @@ def load_database_cache(credentials, cache_path="db_cache.pkl"):
 # Main function for Streamlit app
 # -----------------------------------------------------------------------------
 def main():
-    st.set_page_config(page_title="Smart Database Explorer", layout="wide")
-    st.title("🔍 Smart Database Explorer")
+    st.set_page_config(page_title="AI Database Explorer", layout="wide")
+    st.title("🔍 AI Database Explorer")
 
     # Inisialisasi session state jika belum ada
     if "database_loaded" not in st.session_state:
@@ -173,7 +173,7 @@ def main():
 
     # Konten utama: Input query dan output
     if st.session_state.database_loaded:
-        st.header("💬 Query Data")
+        st.header("💬 Query Data dengan Natural Language")
         with st.form(key="query_form"):
             prompt = st.text_input("Masukkan query Anda:")
             submitted = st.form_submit_button("Submit")
