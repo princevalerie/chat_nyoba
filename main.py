@@ -131,7 +131,6 @@ def main():
     # Sidebar: Database credentials, status, dan error log
     with st.sidebar:
         st.header("🔐 Database Credentials")
-        st.info("Tunggu hingga proses selesai...")
         db_user = st.text_input("PostgreSQL Username", key="db_user")
         db_password = st.text_input("PostgreSQL Password", type="password", key="db_password")
         db_host = st.text_input("PostgreSQL Host", value="localhost", key="db_host")
