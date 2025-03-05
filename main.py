@@ -23,19 +23,17 @@ class StreamlitResponse(ResponseParser):
     def format_dataframe(self, result):
         """Display dataframe using Streamlit and save a placeholder message."""
         st.dataframe(result["value"])
-        # Simpan placeholder ke session state agar tidak menghasilkan None
         st.session_state.messages.append({"role": "assistant", "content": "[Displayed DataFrame]"})
         return
 
     def format_plot(self, result):
         """Display plot image using Streamlit and save a placeholder message."""
         st.image(result["value"])
-        # Simpan placeholder ke session state agar tidak menghasilkan None
         st.session_state.messages.append({"role": "assistant", "content": "[Displayed Plot]"})
         return
 
     def format_other(self, result):
-        """Display other types of results as text and simpan ke session state."""
+        """Display other types of results as text and save it to session state."""
         st.write(str(result["value"]))
         st.session_state.messages.append({"role": "assistant", "content": str(result["value"])})
         return
@@ -132,6 +130,8 @@ def main():
         st.session_state.database_loaded = False
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "answer_cache" not in st.session_state:
+        st.session_state.answer_cache = []  # Container sementara untuk cache answer
 
     # Sidebar untuk database credentials
     with st.sidebar:
@@ -186,11 +186,11 @@ def main():
                 st.markdown(prompt)
             with st.spinner("Generating response..."):
                 try:
-                    # Respons akan di-render langsung oleh StreamlitResponse
+                    # Dapatkan answer dari chat
                     answer = st.session_state.datalake.chat(prompt)
-                    # Jika answer tidak None, simpan ke chat history
-                    if answer is not None:
-                        st.session_state.messages.append({"role": "assistant", "content": answer})
+                    # Selalu simpan answer ke cache dan chat history
+                    st.session_state.answer_cache.append(answer)
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
                 except Exception as e:
                     st.error(f"Error processing chat: {e}")
 
