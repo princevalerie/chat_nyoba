@@ -13,7 +13,6 @@ from pandasai import SmartDataframe, SmartDatalake
 from pandasai.llm import OpenAI
 from pandasai.responses.response_parser import ResponseParser
 
-
 # -----------------------------------------------------------------------------
 # Custom Response Parser for Streamlit
 # -----------------------------------------------------------------------------
@@ -22,20 +21,24 @@ class StreamlitResponse(ResponseParser):
         super().__init__(context)
 
     def format_dataframe(self, result):
-        """Display dataframe using Streamlit."""
+        """Display dataframe using Streamlit and save a placeholder message."""
         st.dataframe(result["value"])
+        # Simpan placeholder ke session state agar tidak menghasilkan None
+        st.session_state.messages.append({"role": "assistant", "content": "[Displayed DataFrame]"})
         return
 
     def format_plot(self, result):
-        """Display plot image using Streamlit."""
+        """Display plot image using Streamlit and save a placeholder message."""
         st.image(result["value"])
+        # Simpan placeholder ke session state agar tidak menghasilkan None
+        st.session_state.messages.append({"role": "assistant", "content": "[Displayed Plot]"})
         return
 
     def format_other(self, result):
-        """Display other types of results as text."""
+        """Display other types of results as text and simpan ke session state."""
         st.write(str(result["value"]))
+        st.session_state.messages.append({"role": "assistant", "content": str(result["value"])})
         return
-
 
 # -----------------------------------------------------------------------------
 # Validate Database Connection and Load Tables
@@ -59,10 +62,10 @@ def validate_and_connect_database(credentials):
         )
 
         with engine.connect() as connection:
-            # Initialize LLM using ChatGroq
+            # Initialize LLM menggunakan ChatGroq
             llm = ChatGroq(model_name="llama-3.3-70b-versatile", api_key=groq_api_key)
 
-            # Inspect database to get tables and views from public schema
+            # Inspect database untuk mendapatkan tabel dan view dari schema public
             inspector = inspect(engine)
             tables = inspector.get_table_names(schema="public")
             views = inspector.get_view_names(schema="public")
@@ -75,11 +78,11 @@ def validate_and_connect_database(credentials):
                 query = f'SELECT * FROM "public"."{table}"'
                 try:
                     df = pd.read_sql_query(query, engine)
-                    # Create SmartDataframe with LLM and custom response parser
+                    # Buat SmartDataframe dengan LLM dan custom response parser
                     sdf = SmartDataframe(df, name=f"public.{table}")
                     sdf.config = {"llm": llm, "response_parser": StreamlitResponse(st)}
                     sdf_list.append(sdf)
-                    # Save table metadata
+                    # Simpan metadata tabel
                     table_info[table] = {
                         "columns": list(df.columns),
                         "row_count": len(df)
@@ -87,14 +90,13 @@ def validate_and_connect_database(credentials):
                 except Exception as e:
                     st.warning(f"Failed to load data from public.{table}: {e}")
 
-            # Create SmartDatalake from list of SmartDataframe instances
+            # Buat SmartDatalake dari list SmartDataframe
             datalake = SmartDatalake(sdf_list, config={"llm": llm, "response_parser": StreamlitResponse})
             return datalake, table_info, engine
 
     except Exception as e:
         st.error(f"Database connection error: {e}")
         return None, None, None
-
 
 # -----------------------------------------------------------------------------
 # Cache database tables using pickle
@@ -118,7 +120,6 @@ def load_database_cache(credentials, cache_path="db_cache.pkl"):
             st.warning(f"Failed to save cache: {e}")
     return datalake, table_info
 
-
 # -----------------------------------------------------------------------------
 # Main function for Streamlit app
 # -----------------------------------------------------------------------------
@@ -126,13 +127,13 @@ def main():
     st.set_page_config(page_title="Smart Database Explorer", layout="wide")
     st.title("🔍 Smart Database Explorer")
 
-    # Initialize session state variables if not already set
+    # Inisialisasi session state jika belum ada
     if "database_loaded" not in st.session_state:
         st.session_state.database_loaded = False
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Sidebar for database credentials
+    # Sidebar untuk database credentials
     with st.sidebar:
         st.header("🔐 Database Credentials")
         db_user = st.text_input("PostgreSQL Username", key="db_user")
@@ -143,7 +144,7 @@ def main():
         groq_api_key = st.text_input("Groq API Key", type="password", key="groq_api_key")
         connect_button = st.button("Connect to Database")
 
-    # Attempt database connection if button is clicked and all credentials are provided
+    # Attempt koneksi database jika tombol ditekan dan semua credentials terisi
     if connect_button and all([db_user, db_password, db_host, db_port, db_name, groq_api_key]):
         credentials = {
             "DB_USER": db_user,
@@ -161,7 +162,7 @@ def main():
             st.session_state.table_info = table_info
             st.session_state.database_loaded = True
 
-    # If the database is loaded, show table info and enable chat
+    # Jika database sudah dimuat, tampilkan informasi tabel dan chat
     if st.session_state.database_loaded:
         st.header("💬 Database Chat")
 
@@ -171,13 +172,13 @@ def main():
                 st.write(f"Columns: {', '.join(info['columns'])}")
                 st.write(f"Row Count: {info['row_count']}")
 
-        # Display conversation history
+        # Tampilkan riwayat percakapan
         for message in st.session_state.messages:
             avatar = "🤖" if message["role"] == "assistant" else "👤"
             with st.chat_message(message["role"], avatar=avatar):
                 st.markdown(message["content"])
 
-        # Chat input for user queries
+        # Chat input untuk query pengguna
         prompt = st.chat_input("Ask a question about your data")
         if prompt:
             st.session_state.messages.append({"role": "user", "content": prompt})
@@ -185,13 +186,13 @@ def main():
                 st.markdown(prompt)
             with st.spinner("Generating response..."):
                 try:
-                    # The response will be rendered directly by the StreamlitResponse class
+                    # Respons akan di-render langsung oleh StreamlitResponse
                     answer = st.session_state.datalake.chat(prompt)
-                    # Always store the response, regardless of format (plot or text)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
+                    # Jika answer tidak None, simpan ke chat history
+                    if answer is not None:
+                        st.session_state.messages.append({"role": "assistant", "content": answer})
                 except Exception as e:
                     st.error(f"Error processing chat: {e}")
-
 
 if __name__ == "__main__":
     main()
