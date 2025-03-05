@@ -21,21 +21,21 @@ class StreamlitResponse(ResponseParser):
         super().__init__(context)
 
     def format_dataframe(self, result):
-        """Display dataframe using Streamlit and save a placeholder message."""
+        """Display dataframe using Streamlit and simpan placeholder message."""
         st.dataframe(result["value"])
-        st.session_state.messages.append({"role": "assistant", "content": "[Displayed DataFrame]"})
+        st.session_state.answer_cache.append("[Displayed DataFrame]")
         return
 
     def format_plot(self, result):
-        """Display plot image using Streamlit and save a placeholder message."""
+        """Display plot image using Streamlit and simpan placeholder message."""
         st.image(result["value"])
-        st.session_state.messages.append({"role": "assistant", "content": "[Displayed Plot]"})
+        st.session_state.answer_cache.append("[Displayed Plot]")
         return
 
     def format_other(self, result):
-        """Display other types of results as text and save it to session state."""
+        """Display other types of results as text and simpan ke cache."""
         st.write(str(result["value"]))
-        st.session_state.messages.append({"role": "assistant", "content": str(result["value"])})
+        st.session_state.answer_cache.append(str(result["value"]))
         return
 
 # -----------------------------------------------------------------------------
@@ -51,16 +51,16 @@ def validate_and_connect_database(credentials):
         db_name = credentials["DB_NAME"]
         groq_api_key = credentials["GROQ_API_KEY"]
 
-        # Encode password for special characters
+        # Encode password untuk karakter khusus
         encoded_password = db_password.replace('@', '%40')
 
-        # Create database engine
+        # Buat database engine
         engine = create_engine(
             f"postgresql://{db_user}:{encoded_password}@{db_host}:{db_port}/{db_name}"
         )
 
         with engine.connect() as connection:
-            # Initialize LLM menggunakan ChatGroq
+            # Inisialisasi LLM menggunakan ChatGroq
             llm = ChatGroq(model_name="llama-3.3-70b-versatile", api_key=groq_api_key)
 
             # Inspect database untuk mendapatkan tabel dan view dari schema public
@@ -128,12 +128,10 @@ def main():
     # Inisialisasi session state jika belum ada
     if "database_loaded" not in st.session_state:
         st.session_state.database_loaded = False
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
     if "answer_cache" not in st.session_state:
         st.session_state.answer_cache = []  # Container sementara untuk cache answer
 
-    # Sidebar untuk database credentials
+    # Sidebar: Database credentials dan info tabel yang telah dimuat
     with st.sidebar:
         st.header("🔐 Database Credentials")
         db_user = st.text_input("PostgreSQL Username", key="db_user")
@@ -143,6 +141,14 @@ def main():
         db_name = st.text_input("Database Name", key="db_name")
         groq_api_key = st.text_input("Groq API Key", type="password", key="groq_api_key")
         connect_button = st.button("Connect to Database")
+
+        # Tampilkan info tabel yang telah dimuat jika database sudah terhubung
+        if st.session_state.get("database_loaded", False):
+            st.subheader("📊 Loaded Tables")
+            for table, info in st.session_state.table_info.items():
+                with st.expander(table):
+                    st.write(f"Columns: {', '.join(info['columns'])}")
+                    st.write(f"Row Count: {info['row_count']}")
 
     # Attempt koneksi database jika tombol ditekan dan semua credentials terisi
     if connect_button and all([db_user, db_password, db_host, db_port, db_name, groq_api_key]):
@@ -161,38 +167,32 @@ def main():
             st.session_state.datalake = datalake
             st.session_state.table_info = table_info
             st.session_state.database_loaded = True
+            st.experimental_rerun()  # Memaksa refresh tampilan sidebar setelah koneksi berhasil
 
-    # Jika database sudah dimuat, tampilkan informasi tabel dan chat
+    # Konten utama: Input query dan output hasil query
     if st.session_state.database_loaded:
-        st.header("💬 Database Chat")
+        st.header("💬 Query Data")
+        # Buat form sederhana untuk memasukkan query
+        with st.form(key="query_form"):
+            prompt = st.text_input("Masukkan query Anda:")
+            submitted = st.form_submit_button("Submit")
+            
+            # Ketika form di-submit, proses query dan refresh output
+            if submitted:
+                # Bersihkan cache output sebelumnya agar output selalu direfresh
+                st.session_state.answer_cache.clear()
+                with st.spinner("Generating output..."):
+                    try:
+                        answer = st.session_state.datalake.chat(prompt)
+                        st.session_state.answer_cache.append(answer)
+                    except Exception as e:
+                        st.error(f"Error processing query: {e}")
 
-        st.subheader("📊 Loaded Tables")
-        for table, info in st.session_state.table_info.items():
-            with st.expander(table):
-                st.write(f"Columns: {', '.join(info['columns'])}")
-                st.write(f"Row Count: {info['row_count']}")
-
-        # Tampilkan riwayat percakapan
-        for message in st.session_state.messages:
-            avatar = "🤖" if message["role"] == "assistant" else "👤"
-            with st.chat_message(message["role"], avatar=avatar):
-                st.markdown(message["content"])
-
-        # Chat input untuk query pengguna
-        prompt = st.chat_input("Ask a question about your data")
-        if prompt:
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(prompt)
-            with st.spinner("Generating response..."):
-                try:
-                    # Dapatkan answer dari chat
-                    answer = st.session_state.datalake.chat(prompt)
-                    # Selalu simpan answer ke cache dan chat history
-                    st.session_state.answer_cache.append(answer)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
-                except Exception as e:
-                    st.error(f"Error processing chat: {e}")
+        # Tampilkan hasil output (output di-refresh setiap submit)
+        if st.session_state.answer_cache:
+            st.subheader("Output")
+            for ans in st.session_state.answer_cache:
+                st.write(ans)
 
 if __name__ == "__main__":
     main()
