@@ -1,7 +1,7 @@
 import os
 import pickle
 from pathlib import Path
-
+import numpy as np
 from PIL import Image
 import streamlit as st
 import pandas as pd
