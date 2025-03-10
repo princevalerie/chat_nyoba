@@ -11,8 +11,6 @@ psycopg2-binary
 pandasai
 langchain-groq
 openai
-google-gemini
-
 
 # Visualization
 matplotlib
